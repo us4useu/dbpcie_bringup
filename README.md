@@ -126,6 +126,16 @@ python dbcie_bringup.py --sn DBLP2601012100 --disable_ss
 
 ---
 
+### `--program_file`
+
+Programs specified .elf file. Ignores other arguments.
+
+```bash
+python dbcie_bringup.py --program_file "custom_fw.elf"
+```
+
+---
+
 ## Notes
 
 * `--sn` is mandatory.
