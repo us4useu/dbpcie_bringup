@@ -1,8 +1,8 @@
 import subprocess
 import os
-import struct
 import argparse
 import sys
+import re
 
 CLI = "STM32_Programmer_CLI"
 
@@ -195,11 +195,76 @@ def main():
     parser.add_argument("--host_pwrsync", action="store_true", help="Host PC power sync option")
     parser.add_argument("--autostart", action="store_true", help="Enable autostart on power-up")
     parser.add_argument("--disable_ss", action="store_true", help="Disable OEM staggered start")
+    parser.add_argument("--program_file", type=str, help="Program DBARLitePCIE flash using specific .elf file (path to file), ignores other arguments")
     #parser.add_argument("-option", type=int, required=False, help="Optional configuration", default=0)
     args = parser.parse_args()
 
+    #check if CLI is available and version 2.13-2.15 exactly
+    try:
+        result = subprocess.run(
+            [CLI, "-version"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+        output = result.stdout + result.stderr
+
+        match = re.search(r"version:\s*([\d.]+)", output, re.IGNORECASE)
+        if not match:
+            print(f"Error: Could not determine {CLI} version.")
+            sys.exit(1)
+
+        version_str = match.group(1)
+        version = tuple(map(int, version_str.split(".")))
+
+        min_version = (2, 13, 0)
+        max_version = (2, 15, 999)  # allow any 2.15.x
+
+        if not (min_version <= version <= max_version):
+            print(
+                f"Error: Supported versions are 2.13.x through 2.15.x. "
+                f"Found {version_str}."
+            )
+            sys.exit(1)
+
+        print(f"{CLI} version {version_str} detected.")
+
+    except FileNotFoundError:
+        print(f"Error: {CLI} not found.")
+        sys.exit(1)
+
+    except subprocess.CalledProcessError as e:
+        print(f"Error running {CLI}:")
+        print(e.stderr)
+        sys.exit(1)
+
     if args.sn.startswith("DBLP"):
         args.sn = args.sn[4:]
+
+    if(args.program_file):
+        if not os.path.isfile(args.program_file):
+            print(f"File '{args.program_file}' does not exist.")
+            sys.exit(1)
+        file = args.program_file
+        cmd = [
+            CLI,
+            "-c", "port=SWD",
+            "-e", "all",
+            "-d", file,
+            "-rst"
+        ]
+        print("\nFlashing STM32 with provided file...\n")
+        print("Command:", " ".join(cmd))
+
+        result = subprocess.run(cmd)
+        
+        if result.returncode != 0:
+            print("❌ Flashing failed!")
+            sys.exit(result.returncode)
+
+        print("\n✅ Flashing completed successfully!")
+        return
 
     #build options byte
     options = 0
